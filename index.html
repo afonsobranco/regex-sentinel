@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Regex Sentinel</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* ─── RESET ─────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ─── TOKENS ─────────────────────────────────────────────────────── */
+    :root {
+      --bg0:#06090e; --bg1:#0d1117; --bg2:#161b22; --bg3:#21262d;
+      --bdr:#30363d;
+      --t0:#e6edf3; --t1:#8b949e; --t2:#484f58;
+      --cyan:#00d4ff;  --orange:#ff6b35; --green:#39ff14;
+      --purple:#bf5af2; --yellow:#ffd60a; --red:#ff3b30;
+      --blue:#0a84ff;  --mint:#30d158;   --pink:#ff6b9d;
+      --font:'JetBrains Mono','Courier New',monospace;
+    }
+    [data-theme="light"] {
+      --bg0:#f0f3f7; --bg1:#ffffff; --bg2:#f6f8fa; --bg3:#edf0f3;
+      --bdr:#d0d7de; --t0:#1c2128; --t1:#57606a; --t2:#8c959f;
+    }
+
+    /* ─── BASE ───────────────────────────────────────────────────────── */
+    body {
+      font-family: var(--font);
+      background: var(--bg0);
+      color: var(--t0);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* grid texture */
+    [data-theme="dark"] body::before {
+      content:'';
+      position:fixed; inset:0;
+      background-image:
+        linear-gradient(rgba(0,212,255,.022) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(0,212,255,.022) 1px,transparent 1px);
+      background-size:52px 52px;
+      pointer-events:none; z-index:0;
+    }
+    body>*{ position:relative; z-index:1; }
+    header{ position:relative; z-index:100; }
+
+    /* ─── HEADER ─────────────────────────────────────────────────────── */
+    header {
+      flex-shrink:0;
+      display:flex; align-items:center; justify-content:space-between;
+      padding:9px 18px;
+      background:var(--bg1);
+      border-bottom:1px solid var(--bdr);
+    }
+    header::after {
+      content:''; position:absolute; bottom:0; left:0; right:0; height:1px;
+      background:linear-gradient(90deg,transparent,var(--cyan) 35%,var(--orange) 65%,transparent);
+      opacity:.45;
+    }
+
+    .logo { display:flex; align-items:center; gap:11px; }
+    .logo-pulse {
+      width:8px; height:8px; border-radius:50%;
+      background:var(--cyan); box-shadow:0 0 9px var(--cyan);
+      animation:blink 2s ease-in-out infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25;transform:scale(.75)} }
+    .logo-name {
+      font-size:11px; font-weight:700; letter-spacing:4px;
+      color:var(--cyan); text-transform:uppercase;
+    }
+    .logo-sub { font-size:8px; color:var(--t2); letter-spacing:2px; text-transform:uppercase; }
+    .status-pill {
+      display:flex; align-items:center; gap:5px;
+      padding:2px 8px; border:1px solid var(--green); border-radius:2px;
+      font-size:7px; color:var(--green); letter-spacing:2px; text-transform:uppercase;
+    }
+    .status-dot {
+      width:5px; height:5px; border-radius:50%; background:var(--green);
+      animation:blink 1.4s infinite;
+    }
+
+    .hdr-right { display:flex; align-items:center; gap:5px; }
+
+    /* ─── BUTTON ─────────────────────────────────────────────────────── */
+    .btn {
+      display:inline-flex; align-items:center; gap:5px;
+      padding:5px 11px;
+      font-family:var(--font); font-size:9px; font-weight:600;
+      letter-spacing:1px; text-transform:uppercase;
+      border:1px solid var(--bdr); background:var(--bg2); color:var(--t1);
+      cursor:pointer; border-radius:3px; transition:all .14s; white-space:nowrap;
+    }
+    .btn:hover { border-color:var(--cyan); color:var(--cyan); }
+    .btn.danger:hover { border-color:var(--red); color:var(--red); }
+    .btn.ok { border-color:var(--green)!important; color:var(--green)!important; }
+
+    /* ─── PRESET DROPDOWN ────────────────────────────────────────────── */
+    .preset-wrap { position:relative; }
+    .preset-menu {
+      display:none; position:absolute; top:calc(100% + 4px); right:0;
+      width:235px; background:var(--bg1); border:1px solid var(--bdr);
+      border-radius:5px; overflow:hidden; z-index:999;
+      box-shadow:0 8px 28px rgba(0,0,0,.45);
+    }
+    .preset-menu.open { display:block; }
+    .pitem { padding:8px 12px; cursor:pointer; border-bottom:1px solid var(--bdr); transition:background .1s; }
+    .pitem:last-child { border-bottom:none; }
+    .pitem:hover { background:var(--bg2); }
+    .pitem-name { font-size:11px; font-weight:600; color:var(--t0); margin-bottom:2px; }
+    .pitem-pat  { font-size:9px; color:var(--cyan); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+    /* ─── LAYOUT ─────────────────────────────────────────────────────── */
+    main {
+      flex:1; display:grid; grid-template-columns:44% 56%; overflow:hidden;
+    }
+    .lpanel {
+      border-right:1px solid var(--bdr);
+      overflow-y:auto; padding:13px;
+      display:flex; flex-direction:column; gap:9px;
+      background:var(--bg1);
+    }
+    .rpanel { overflow-y:auto; padding:13px; background:var(--bg0); }
+
+    /* ─── SECTION LABEL ──────────────────────────────────────────────── */
+    .slbl {
+      font-size:7px; font-weight:700; letter-spacing:3px; text-transform:uppercase;
+      color:var(--t2); margin-bottom:5px;
+      display:flex; align-items:center; gap:7px;
+    }
+    .slbl::after { content:''; flex:1; height:1px; background:var(--bdr); }
+
+    /* ─── FIELD ──────────────────────────────────────────────────────── */
+    textarea.field {
+      width:100%; background:var(--bg0); border:1px solid var(--bdr); border-radius:4px;
+      color:var(--t0); font-family:var(--font); font-size:13px;
+      padding:8px 10px; outline:none; resize:none; line-height:1.65;
+      transition:border-color .14s, box-shadow .14s;
+    }
+    textarea.field:focus { border-color:var(--cyan); box-shadow:0 0 0 3px rgba(0,212,255,.1); }
+    textarea.field.err {
+      border-color:var(--red);
+      animation:errpulse 1.2s ease infinite;
+    }
+    @keyframes errpulse {
+      0%,100%{ box-shadow:0 0 0 3px rgba(255,59,48,.15); }
+      50%    { box-shadow:0 0 0 1px rgba(255,59,48,.04); }
+    }
+
+    /* ─── ERROR TIP ──────────────────────────────────────────────────── */
+    .etip {
+      display:none; margin-top:4px; padding:5px 9px;
+      background:rgba(255,59,48,.07); border:1px solid rgba(255,59,48,.28);
+      border-radius:3px; font-size:10px; color:var(--red); line-height:1.5;
+    }
+    .etip.show { display:block; }
+
+    /* ─── SYNTAX VIEW ────────────────────────────────────────────────── */
+    .synview {
+      background:var(--bg0); border:1px solid var(--bdr); border-radius:4px;
+      padding:8px 10px; min-height:36px;
+      font-size:14px; line-height:1.7; letter-spacing:.3px;
+      word-break:break-all; cursor:default; user-select:none;
+    }
+    .rxc { display:inline; cursor:pointer; border-radius:2px; transition:background .08s, outline .08s; }
+    .rxc.hov { background:rgba(255,255,255,.1); outline:1px solid rgba(255,255,255,.22); }
+    .rxc.sel { background:rgba(0,212,255,.18); outline:1px solid var(--cyan); }
+    .ph { color:var(--t2); font-style:italic; font-size:10px; }
+
+    /* ─── FLAGS ──────────────────────────────────────────────────────── */
+    .flagrow { display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
+    .flaglbl { font-size:7px; color:var(--t2); letter-spacing:1.5px; text-transform:uppercase; }
+    .fchip {
+      padding:3px 9px; font-family:var(--font); font-size:11px; font-weight:600;
+      border:1px solid var(--bdr); background:var(--bg2); color:var(--t2);
+      border-radius:3px; cursor:pointer; transition:all .14s;
+    }
+    .fchip.on { border-color:var(--cyan); color:var(--cyan); background:rgba(0,212,255,.08); }
+    .fchip:hover:not(.on) { color:var(--t1); border-color:var(--t2); }
+    .fhint { font-size:9px; color:var(--t2); margin-top:3px; line-height:1.5; }
+
+    /* ─── TEST VIEW ──────────────────────────────────────────────────── */
+    .testview {
+      background:var(--bg0); border:1px solid var(--bdr); border-radius:4px;
+      padding:8px 10px; min-height:36px; font-size:13px; line-height:1.7; word-break:break-all;
+    }
+    .tc { display:inline; border-radius:2px; }
+    .matchbar { display:flex; align-items:center; gap:8px; margin-top:4px; }
+    .mct { font-size:9px; color:var(--t2); letter-spacing:1px; }
+    .mct.found { color:var(--green); }
+
+    /* ─── CAPTURE TABLE ──────────────────────────────────────────────── */
+    .capwrap { overflow-x:auto; border:1px solid var(--bdr); border-radius:4px; }
+    .captbl { width:100%; border-collapse:collapse; font-size:10px; }
+    .captbl th {
+      padding:5px 9px; background:var(--bg2); color:var(--t2);
+      font-size:7px; letter-spacing:1.5px; text-transform:uppercase;
+      text-align:left; border-bottom:1px solid var(--bdr); white-space:nowrap;
+    }
+    .captbl td { padding:5px 9px; border-bottom:1px solid var(--bdr); color:var(--t1); white-space:nowrap; }
+    .captbl tr:last-child td { border-bottom:none; }
+    .captbl code { background:var(--bg2); padding:1px 4px; border-radius:2px; }
+
+    /* ─── FLIGHT PLAN ────────────────────────────────────────────────── */
+    .fphead {
+      display:flex; align-items:center; justify-content:space-between;
+      margin-bottom:13px; padding-bottom:8px; border-bottom:1px solid var(--bdr);
+    }
+    .fptitle { font-size:7px; letter-spacing:4px; text-transform:uppercase; color:var(--cyan); font-weight:700; }
+    .fpcnt   { font-size:9px; color:var(--t2); }
+    .fpbody  { position:relative; }
+    .fpline  {
+      position:absolute; left:12px; top:22px; bottom:0; width:1px;
+      background:linear-gradient(to bottom,var(--cyan),rgba(0,212,255,0));
+    }
+
+    /* ─── CARDS ──────────────────────────────────────────────────────── */
+    .cw { position:relative; margin-bottom:6px; }
+    .cdot {
+      position:absolute; top:13px; width:9px; height:9px; border-radius:50%;
+      background:var(--bg0); border:2px solid var(--bdr); z-index:2;
+      transition:all .18s;
+    }
+    .cdot.lit { border-color:var(--cyan); background:var(--cyan); box-shadow:0 0 7px var(--cyan); }
+
+    .fc {
+      position:relative; background:var(--bg1); border:1px solid var(--bdr);
+      border-radius:5px; padding:8px 11px; cursor:pointer; overflow:hidden;
+      transition:transform .14s, border-color .14s, box-shadow .14s;
+    }
+    .fc::before {
+      content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
+      background:var(--cc,var(--bdr)); border-radius:3px 0 0 3px;
+    }
+    .fc:hover { border-color:var(--cc,var(--bdr)); box-shadow:0 0 13px var(--cg,transparent); transform:translateX(2px); }
+    .fc.hl    { border-color:var(--cc,var(--bdr)); background:var(--bg2); box-shadow:0 0 13px var(--cg,transparent); }
+
+    .fc-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; }
+    .fc-badge {
+      font-size:7px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase;
+      padding:2px 6px; border-radius:2px;
+      color:var(--cc,var(--t2)); border:1px solid var(--cc40,var(--bdr)); background:var(--cc10,var(--bg2));
+    }
+    .fc-raw {
+      font-size:11px; font-weight:600; color:var(--cc,var(--t1));
+      max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    }
+    .fc-lbl  { font-size:12px; font-weight:600; color:var(--t0); margin-bottom:2px; }
+    .fc-desc { font-size:9px; color:var(--t1); line-height:1.5; }
+    .fc-flags { display:flex; gap:4px; margin-top:5px; flex-wrap:wrap; }
+    .fa {
+      font-size:7px; padding:1px 5px; border-radius:2px;
+      border:1px solid rgba(0,212,255,.3); background:rgba(0,212,255,.08); color:var(--cyan);
+    }
+    .fc-kids { margin-top:7px; }
+    .fc-kids-lbl { font-size:7px; color:var(--t2); letter-spacing:1.5px; text-transform:uppercase; margin-bottom:4px; }
+    .crail { border-left:2px solid; margin-left:3px; padding-left:8px; }
+    .brsep {
+      font-size:7px; color:var(--t2); letter-spacing:1.5px; text-transform:uppercase;
+      padding:3px 0; display:flex; align-items:center; gap:5px;
+    }
+    .brsep::after { content:''; flex:1; height:1px; background:var(--bdr); }
+
+    /* ─── EMPTY / ERROR STATES ───────────────────────────────────────── */
+    .empty { text-align:center; padding:52px 20px; color:var(--t2); }
+    .empty-icon  { font-size:34px; margin-bottom:11px; opacity:.38; }
+    .empty-title { font-size:9px; letter-spacing:3px; text-transform:uppercase; margin-bottom:5px; }
+    .empty-sub   { font-size:9px; line-height:1.7; }
+
+    .errc { border:1px solid rgba(255,59,48,.33); background:rgba(255,59,48,.06); border-radius:5px; padding:14px; color:var(--red); }
+    .errc-title { font-size:9px; font-weight:700; letter-spacing:2px; text-transform:uppercase; margin-bottom:5px; }
+    .errc-msg   { font-size:11px; line-height:1.5; }
+
+    /* ─── SCROLLBAR ──────────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width:5px; height:5px; }
+    ::-webkit-scrollbar-track { background:transparent; }
+    ::-webkit-scrollbar-thumb { background:var(--bdr); border-radius:3px; }
+    ::-webkit-scrollbar-thumb:hover { background:var(--t2); }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════ HEADER ══ -->
+<header>
+  <div class="logo">
+    <div class="logo-pulse"></div>
+    <div>
+      <div class="logo-name">Regex Sentinel</div>
+      <div class="logo-sub">Pattern Analysis Engine · v2.0</div>
+    </div>
+    <div class="status-pill"><div class="status-dot"></div>ONLINE</div>
+  </div>
+  <div class="hdr-right">
+    <div class="preset-wrap">
+      <button class="btn" id="presetBtn" onclick="togglePresets()">⊞ Presets ▾</button>
+      <div class="preset-menu" id="presetMenu"></div>
+    </div>
+    <button class="btn" id="themeBtn" onclick="toggleTheme()">☽ Dark</button>
+    <button class="btn" id="copyBtn" onclick="copyRegex()">⧉ Copy</button>
+    <button class="btn danger" onclick="clearAll()">✕ Clear</button>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════ MAIN ═══ -->
+<main>
+
+  <!-- LEFT PANEL -->
+  <div class="lpanel">
+
+    <div>
+      <div class="slbl">Pattern</div>
+      <textarea class="field" id="rxInput" rows="2" placeholder="Enter regex pattern…" spellcheck="false"></textarea>
+      <div class="etip" id="etip"></div>
+    </div>
+
+    <div>
+      <div class="slbl">Syntax View <span style="color:var(--t2);font-size:8px;letter-spacing:1px">(hover / click chars)</span></div>
+      <div class="synview" id="synview"><span class="ph">token colors appear here…</span></div>
+    </div>
+
+    <div>
+      <div class="slbl">Flags</div>
+      <div class="flagrow">
+        <span class="flaglbl">Active:</span>
+        <button class="fchip on"  data-flag="g" onclick="toggleFlag(this)">g</button>
+        <button class="fchip"     data-flag="i" onclick="toggleFlag(this)">i</button>
+        <button class="fchip"     data-flag="m" onclick="toggleFlag(this)">m</button>
+        <button class="fchip"     data-flag="s" onclick="toggleFlag(this)">s</button>
+      </div>
+      <div class="fhint" id="fhint">global — finds all matches in the string</div>
+    </div>
+
+    <div>
+      <div class="slbl">Test String</div>
+      <textarea class="field" id="tsInput" rows="3" placeholder="Type a string to test…" spellcheck="false"></textarea>
+    </div>
+
+    <div>
+      <div class="slbl">Match Highlights</div>
+      <div class="testview" id="testview"><span class="ph">— awaiting input —</span></div>
+      <div class="matchbar">
+        <span class="mct" id="mct">—</span>
+      </div>
+    </div>
+
+    <div id="capsec" style="display:none">
+      <div class="slbl">Capture Groups</div>
+      <div class="capwrap"><div id="capcontent"></div></div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="rpanel">
+    <div class="fphead">
+      <div class="fptitle">⌘ Flight Plan</div>
+      <div class="fpcnt" id="fpcnt">—</div>
+    </div>
+    <div class="fpbody" id="fpbody">
+      <div class="fpline" id="fpline" style="display:none"></div>
+      <div class="empty" id="empstate">
+        <div class="empty-icon">◈</div>
+        <div class="empty-title">Awaiting Pattern</div>
+        <div class="empty-sub">Enter a regex above to begin<br>recursive token analysis</div>
+      </div>
+      <div id="cardsroot"></div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ═══════════════════════════════════════════ SCRIPT ══ -->
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   REGEX SENTINEL  —  Full Logic
+═══════════════════════════════════════════════════════════════════════ */
+
+/* ── GLOBAL STATE ─────────────────────────────────────────────────────── */
+const S = {
+  pattern:'', testStr:'',
+  flags: new Set(['g']),
+  tokens:[], matches:[],
+  error:null, theme:'dark',
+};
+
+/* ── PRESETS ──────────────────────────────────────────────────────────── */
+const PRESETS = [
+  { name:'Email Address',  pattern:'^[\\w.-]+@[\\w.-]+\\.\\w{2,}$',              test:'user@example.com and bad@ test' },
+  { name:'IPv4 Address',   pattern:'^(\\d{1,3}\\.){3}\\d{1,3}$',                test:'192.168.1.1' },
+  { name:'UUID v4',        pattern:'[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}', test:'550e8400-e29b-41d4-a716-446655440000' },
+  { name:'URL (http/s)',   pattern:'https?:\\/\\/[\\w.-]+(\\/[\\w.\\/-]*)?',     test:'Try https://example.com/path or http://test.io' },
+  { name:'ISO 8601 Date',  pattern:'\\d{4}-\\d{2}-\\d{2}',                       test:'Dates: 2024-12-31 and 2025-01-15 here' },
+  { name:'Hex Color',      pattern:'#(?:[0-9a-fA-F]{3}){1,2}\\b',              test:'Colors: #ff6b35 #abc #1a2b3c #xyz' },
+];
+
+/* ── TOKEN THEME ──────────────────────────────────────────────────────── */
+const TH = {
+  anchor:               { c:'#bf5af2', l:'ANCHOR' },
+  literal:              { c:'#7a8794', l:'LITERAL' },
+  charClass:            { c:'#0a84ff', l:'CHAR CLASS' },
+  escape:               { c:'#ffd60a', l:'ESCAPE' },
+  wildcard:             { c:'#30d158', l:'WILDCARD' },
+  quantifier:           { c:'#ff9f0a', l:'QUANTIFIER' },
+  'group-capturing':    { c:'#30d158', l:'CAPTURE GRP' },
+  'group-non-capturing':{ c:'#64d2ff', l:'GROUP' },
+  'group-named':        { c:'#ffd60a', l:'NAMED GRP' },
+  'group-lookahead-pos':{ c:'#ff6b9d', l:'LOOKAHEAD ＋' },
+  'group-lookahead-neg':{ c:'#ff3b30', l:'LOOKAHEAD −' },
+  'group-lookbehind-pos':{ c:'#ff9f0a', l:'LOOKBHND ＋' },
+  'group-lookbehind-neg':{ c:'#ff453a', l:'LOOKBHND −' },
+  alternation:          { c:'#bf5af2', l:'ALTERNATION' },
+};
+function getTH(tok){
+  const k = tok.type==='group' ? `group-${tok.gt}` : tok.type;
+  return TH[k] || {c:'#7a8794', l:tok.type.toUpperCase()};
+}
+
+/* ── MATCH PALETTE ────────────────────────────────────────────────────── */
+const MP = [
+  {bg:'rgba(0,212,255,.19)',   t:'#00d4ff'},
+  {bg:'rgba(255,107,53,.19)',  t:'#ff6b35'},
+  {bg:'rgba(57,255,20,.19)',   t:'#39ff14'},
+  {bg:'rgba(191,90,242,.19)',  t:'#bf5af2'},
+  {bg:'rgba(255,214,10,.19)',  t:'#ffd60a'},
+];
+
+/* ═══════════════════════════════════════════════════════════════════════
+   RECURSIVE DESCENT PARSER
+═══════════════════════════════════════════════════════════════════════ */
+class RXParser {
+  constructor(src){ this.s=src; this.i=0; this.gi=0; }
+  ch(o=0){ return this.s[this.i+o]; }
+  eat()   { return this.s[this.i++]; }
+  eof()   { return this.i>=this.s.length; }
+
+  parse(){ return this.alt(); }
+
+  /* Alternation: A|B|C */
+  alt(){
+    const st=this.i;
+    const brs=[this.seq()];
+    while(!this.eof()&&this.ch()==='|'){ this.eat(); brs.push(this.seq()); }
+    if(brs.length===1) return brs[0];
+    return [{type:'alternation', raw:this.s.slice(st,this.i), start:st, end:this.i,
+              label:`Alternation (${brs.length} options)`,
+              description:`Match exactly one of ${brs.length} alternative branches`,
+              branches:brs}];
+  }
+
+  /* Sequence: t1 t2 … */
+  seq(){
+    const toks=[];
+    while(!this.eof()&&this.ch()!=='|'&&this.ch()!==')'){ const t=this.tok(); if(t) toks.push(t); }
+    return toks;
+  }
+
+  /* Token: atom + optional quantifier */
+  tok(){
+    const st=this.i;
+    const atom=this.atom();
+    if(!atom) return null;
+    const q=this.tryQ();
+    if(q){
+      return {type:'quantifier', raw:this.s.slice(st,this.i), start:st, end:this.i,
+              label:this.qLbl(q), description:this.qDesc(q,atom), qi:q, child:atom};
+    }
+    return atom;
+  }
+
+  atom(){
+    if(this.eof()) return null;
+    const c=this.ch();
+    if(c==='(')  return this.grp();
+    if(c==='[')  return this.cc();
+    if(c==='\\') return this.esc();
+    if(c==='^'||c==='$') return this.anc();
+    if(c==='.')  return this.wild();
+    if(c===')'||c==='|') return null;
+    return this.lit();
+  }
+
+  anc(){
+    const st=this.i; const c=this.eat();
+    return {type:'anchor', raw:c, start:st, end:this.i,
+      label: c==='^'?'Start Anchor':'End Anchor',
+      description: c==='^'
+        ?'Matches the start of the string (or each line when m flag is active)'
+        :'Matches the end of the string (or each line when m flag is active)'};
+  }
+
+  wild(){
+    const st=this.i; this.eat();
+    return {type:'wildcard', raw:'.', start:st, end:this.i,
+      label:'Wildcard ·',
+      description:'Matches any single character except newline. With s flag enabled, also matches newlines.'};
+  }
+
+  lit(){
+    const st=this.i; const c=this.eat();
+    return {type:'literal', raw:c, start:st, end:this.i,
+      label:`Literal "${c}"`,
+      description:`Matches the exact character "${c}" at this position`};
+  }
+
+  esc(){
+    const st=this.i; this.eat(); // '\'
+    if(this.eof()) throw new Error('Incomplete escape sequence at end of pattern');
+    const c=this.eat();
+    if(c==='x'){
+      const h=this.s.slice(this.i,this.i+2); this.i+=Math.min(2,this.s.length-this.i);
+      return {type:'escape', raw:`\\x${h}`, start:st, end:this.i,
+        label:'Hex Escape', description:`Matches character with hex code 0x${h.toUpperCase()}`};
+    }
+    if(c==='u'){
+      if(this.ch()==='{'){
+        let hex=''; this.eat();
+        while(!this.eof()&&this.ch()!=='}') hex+=this.eat();
+        if(!this.eof()) this.eat();
+        return {type:'escape', raw:`\\u{${hex}}`, start:st, end:this.i,
+          label:'Unicode Escape', description:`Matches Unicode code point U+${hex.toUpperCase()}`};
+      }
+      const h=this.s.slice(this.i,this.i+4); this.i+=Math.min(4,this.s.length-this.i);
+      return {type:'escape', raw:`\\u${h}`, start:st, end:this.i,
+        label:'Unicode Escape', description:`Matches Unicode character U+${h.toUpperCase()}`};
+    }
+    const M={
+      d:['Digit',             'Any digit character [0-9]'],
+      D:['Non-Digit',         'Any character that is NOT a digit [^0-9]'],
+      w:['Word Character',    'Any word character — letters, digits, underscore [a-zA-Z0-9_]'],
+      W:['Non-Word Char',     'Any character that is NOT a word character'],
+      s:['Whitespace',        'Any whitespace — space, tab, newline, form-feed, etc.'],
+      S:['Non-Whitespace',    'Any character that is NOT whitespace'],
+      b:['Word Boundary',     'Zero-width assertion: position between a word char and a non-word char'],
+      B:['Non-Word Boundary', 'Zero-width assertion: position NOT at a word boundary'],
+      n:['Newline',           'Matches a line-feed character (\\u000A)'],
+      t:['Tab',               'Matches a horizontal tab character (\\u0009)'],
+      r:['Carriage Return',   'Matches a carriage return character (\\u000D)'],
+      '0':['Null Character',  'Matches a null character (\\u0000)'],
+      f:['Form Feed',         'Matches a form-feed character (\\u000C)'],
+      v:['Vertical Tab',      'Matches a vertical tab character (\\u000B)'],
+    };
+    if(M[c]) return {type:'escape', raw:`\\${c}`, start:st, end:this.i, label:M[c][0], description:M[c][1]};
+    if(c>='1'&&c<='9') return {type:'escape', raw:`\\${c}`, start:st, end:this.i,
+      label:`Back-Reference \\${c}`,
+      description:`Refers to the text matched by capture group #${c}`};
+    return {type:'escape', raw:`\\${c}`, start:st, end:this.i,
+      label:`Escaped "${c}"`,
+      description:`Literal "${c}" character — escaped to remove any special meaning`};
+  }
+
+  cc(){
+    const st=this.i; this.eat(); // '['
+    let neg=false;
+    if(!this.eof()&&this.ch()==='^'){ neg=true; this.eat(); }
+    const items=[];
+    while(!this.eof()&&this.ch()!==']'){
+      if(this.ch()==='\\'){
+        this.eat(); if(this.eof()) break;
+        const ec=this.eat();
+        const em={d:'\\d (digits)',D:'\\D (non-digits)',w:'\\w (word)',W:'\\W (non-word)',
+                  s:'\\s (whitespace)',S:'\\S (non-ws)',n:'\\n',t:'\\t'};
+        items.push(em[ec]||`\\${ec}`);
+      } else {
+        const ch=this.eat();
+        if(!this.eof()&&this.ch()==='-'&&this.s[this.i+1]&&this.s[this.i+1]!==']'){
+          this.eat();
+          items.push(`'${ch}'–'${this.eat()}'`);
+        } else items.push(`'${ch}'`);
+      }
+    }
+    if(!this.eof()) this.eat(); // ']'
+    const raw=this.s.slice(st,this.i);
+    return {type:'charClass', raw, start:st, end:this.i, negated:neg, items,
+      label: neg?'Negated Character Class':'Character Class',
+      description: (neg?'Matches any character EXCEPT: ':'Matches any one character from: ')+items.join(', ')};
+  }
+
+  grp(){
+    const st=this.i; this.eat(); // '('
+    let gt='capturing', gn=null;
+    if(!this.eof()&&this.ch()==='?'){
+      this.eat();
+      if     (this.ch()===':')  { this.eat(); gt='non-capturing'; }
+      else if(this.ch()==='<'){
+        this.eat();
+        if     (this.ch()==='=') { this.eat(); gt='lookbehind-pos'; }
+        else if(this.ch()==='!') { this.eat(); gt='lookbehind-neg'; }
+        else {
+          gt='named'; gn='';
+          while(!this.eof()&&this.ch()!=='>') gn+=this.eat();
+          if(!this.eof()) this.eat(); // '>'
+        }
+      }
+      else if(this.ch()==='=') { this.eat(); gt='lookahead-pos'; }
+      else if(this.ch()==='!') { this.eat(); gt='lookahead-neg'; }
+    }
+    let ci=null;
+    if(gt==='capturing'||gt==='named') ci=++this.gi;
+    const inner=this.alt();
+    if(this.eof()||this.ch()!==')') throw new Error(`Unterminated group at position ${st}`);
+    this.eat(); // ')'
+    const raw=this.s.slice(st,this.i);
+    const LBL={
+      'capturing':     [`Capture Group #${ci}`,  `Captures matched content; stored as back-reference group #${ci}`],
+      'non-capturing': ['Non-Capturing Group',    'Groups tokens together without creating a numbered capture'],
+      'named':         [`Named Group "${gn}"`,    `Captures matched content; accessible as "${gn}" (and group #${ci})`],
+      'lookahead-pos': ['Positive Lookahead',     'Zero-width: the pattern ahead MUST match (does not consume characters)'],
+      'lookahead-neg': ['Negative Lookahead',     'Zero-width: the pattern ahead must NOT match (does not consume characters)'],
+      'lookbehind-pos':['Positive Lookbehind',    'Zero-width: the pattern behind MUST match (does not consume characters)'],
+      'lookbehind-neg':['Negative Lookbehind',    'Zero-width: the pattern behind must NOT match (does not consume characters)'],
+    };
+    return {type:'group', raw, start:st, end:this.i, gt, groupName:gn, ci,
+      label:LBL[gt][0], description:LBL[gt][1],
+      children: Array.isArray(inner)?inner:[inner]};
+  }
+
+  tryQ(){
+    if(this.eof()) return null;
+    const c=this.ch(); let sym,mn,mx;
+    if     (c==='*'){ this.eat(); sym='*'; mn=0; mx=Infinity; }
+    else if(c==='+'){ this.eat(); sym='+'; mn=1; mx=Infinity; }
+    else if(c==='?'){ this.eat(); sym='?'; mn=0; mx=1; }
+    else if(c==='{'){
+      const p=this.i; this.eat();
+      let ms='';
+      while(!this.eof()&&this.ch()>='0'&&this.ch()<='9') ms+=this.eat();
+      if(!ms||this.eof()){ this.i=p; return null; }
+      mn=parseInt(ms,10);
+      if(this.ch()==='}'){
+        this.eat(); sym=`{${mn}}`; mx=mn;
+      } else if(this.ch()===','){
+        this.eat(); let xs='';
+        while(!this.eof()&&this.ch()>='0'&&this.ch()<='9') xs+=this.eat();
+        if(!this.eof()&&this.ch()==='}'){
+          this.eat(); mx=xs?parseInt(xs,10):Infinity;
+          sym=xs?`{${mn},${mx}}`:`{${mn},}`;
+        } else { this.i=p; return null; }
+      } else { this.i=p; return null; }
+    } else return null;
+    let lazy=false;
+    if(!this.eof()&&this.ch()==='?'){ this.eat(); lazy=true; }
+    return {sym,mn,mx,lazy};
+  }
+
+  qLbl(q){
+    const suf=q.sym==='?'?'':(q.lazy?' · lazy':' · greedy');
+    if(q.sym==='?') return 'Optional (0 or 1)';
+    if(q.sym==='*') return `Zero or More${suf}`;
+    if(q.sym==='+') return `One or More${suf}`;
+    if(q.mx===q.mn) return `Exactly ${q.mn} time${q.mn!==1?'s':''}`;
+    if(q.mx===Infinity) return `At Least ${q.mn} time${q.mn!==1?'s':''}${suf}`;
+    return `Between ${q.mn}–${q.mx} times${suf}`;
+  }
+  qDesc(q,atom){
+    const what=atom.label||`"${atom.raw}"`;
+    const suf=q.lazy?' (lazy — stops at first possible)'
+                    :' (greedy — matches as many as possible)';
+    if(q.sym==='?') return `${what} — optional, match 0 or 1 times`;
+    if(q.sym==='*') return `Match ${what} zero or more times${suf}`;
+    if(q.sym==='+') return `Match ${what} one or more times${suf}`;
+    if(q.mx===q.mn) return `Match ${what} exactly ${q.mn} time${q.mn!==1?'s':''}`;
+    if(q.mx===Infinity) return `Match ${what} at least ${q.mn} time${q.mn!==1?'s':''}${suf}`;
+    return `Match ${what} between ${q.mn} and ${q.mx} times${suf}`;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   POSITION MAP  (drives per-character syntax coloring)
+═══════════════════════════════════════════════════════════════════════ */
+function buildPosMap(tokens, map={}){
+  for(const tok of tokens){
+    const th=getTH(tok);
+    for(let i=tok.start;i<tok.end;i++) map[i]={tok, color:th.c};
+    // Children OVERWRITE their sub-ranges (inner tokens win)
+    if(tok.type==='quantifier'&&tok.child)     buildPosMap([tok.child],map);
+    if(tok.type==='group'&&tok.children)        buildPosMap(tok.children,map);
+    if(tok.type==='alternation'&&tok.branches)  tok.branches.forEach(b=>buildPosMap(b,map));
+  }
+  return map;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   UTILITIES
+═══════════════════════════════════════════════════════════════════════ */
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function countToks(toks){
+  let n=0;
+  for(const t of toks){
+    n++;
+    if(t.type==='quantifier'&&t.child)    n+=countToks([t.child]);
+    if(t.type==='group'&&t.children)       n+=countToks(t.children);
+    if(t.type==='alternation'&&t.branches) t.branches.forEach(b=>n+=countToks(b));
+  }
+  return n;
+}
+
+function getGNMap(toks, m={}){
+  for(const t of toks){
+    if(t.type==='group'&&t.gt==='named'&&t.ci) m[t.ci]=t.groupName;
+    if(t.type==='group'&&t.children)            getGNMap(t.children,m);
+    if(t.type==='quantifier'&&t.child)          getGNMap([t.child],m);
+    if(t.type==='alternation'&&t.branches)      t.branches.forEach(b=>getGNMap(b,m));
+  }
+  return m;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   RENDERERS
+═══════════════════════════════════════════════════════════════════════ */
+function renderSynView(pat, toks){
+  if(!pat) return '<span class="ph">token colors appear here…</span>';
+  const pm=buildPosMap(toks);
+  let h='';
+  for(let i=0;i<pat.length;i++){
+    const info=pm[i];
+    const color=info?info.color:'#7a8794';
+    const ts=info?info.tok.start:i;
+    const te=info?info.tok.end:i+1;
+    const ch=pat[i]===' '?'&nbsp;':esc(pat[i]);
+    h+=`<span class="rxc" data-pos="${i}" data-ts="${ts}" data-te="${te}" style="color:${color}">${ch}</span>`;
+  }
+  return h;
+}
+
+function renderTestView(str, matches){
+  if(!str) return '<span class="ph">— awaiting input —</span>';
+  const cm=new Array(str.length).fill(-1);
+  for(let mi=0;mi<matches.length;mi++){
+    const m=matches[mi];
+    for(let i=m.index;i<m.index+m[0].length&&i<str.length;i++) cm[i]=mi;
+  }
+  let h='';
+  for(let i=0;i<str.length;i++){
+    const mi=cm[i];
+    const ch=str[i]===' '?'&nbsp;':esc(str[i]);
+    if(mi>=0){
+      const p=MP[mi%MP.length];
+      h+=`<span class="tc" style="background:${p.bg};color:${p.t};border-radius:2px">${ch}</span>`;
+    } else h+=`<span class="tc">${ch}</span>`;
+  }
+  return h;
+}
+
+function renderCapTable(matches, gnMap){
+  if(!matches.length) return '';
+  const ng=Math.max(...matches.map(m=>m.length-1),0);
+  let th='<th>#</th><th>Full Match</th>';
+  for(let g=1;g<=ng;g++){
+    const n=gnMap[g]; th+=`<th>${n?`&lt;${esc(n)}&gt;`:`Group ${g}`}</th>`;
+  }
+  th+='<th>Index</th>';
+  // Extra named groups (shouldn't normally exist but defensive)
+  const extraKeys=[];
+  if(matches[0]&&matches[0].groups){
+    for(const k of Object.keys(matches[0].groups)){
+      if(!Object.values(gnMap).includes(k)) extraKeys.push(k);
+    }
+  }
+  for(const k of extraKeys) th+=`<th>&lt;${esc(k)}&gt;</th>`;
+
+  const rows=matches.map((m,mi)=>{
+    const p=MP[mi%MP.length];
+    let td=`<td style="color:${p.t}">${mi}</td>`;
+    td+=`<td><code style="color:${p.t}">${esc(m[0])}</code></td>`;
+    for(let g=1;g<=ng;g++) td+=`<td>${m[g]!=null?`<code>${esc(m[g])}</code>`:'<span style="color:var(--t2)">—</span>'}</td>`;
+    td+=`<td style="color:var(--t2)">${m.index}</td>`;
+    for(const k of extraKeys){
+      const v=m.groups&&m.groups[k];
+      td+=`<td>${v!=null?`<code style="color:var(--yellow)">${esc(v)}</code>`:'<span style="color:var(--t2)">—</span>'}</td>`;
+    }
+    return `<tr>${td}</tr>`;
+  }).join('');
+  return `<table class="captbl"><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+/* ── FLIGHT PLAN CARDS ────────────────────────────────────────────────── */
+let _cid=0;
+function renderCards(toks, depth=0){ return toks.map(t=>renderCard(t,depth)).join(''); }
+
+function renderCard(tok, depth){
+  const th=getTH(tok);
+  const id=`fc${_cid++}`;
+  const c=th.c;
+  const cg=c+'55';       // glow
+  const cc20=c+'33';     // rail border
+  const cc40=c+'55';     // badge border
+  const cc10=c+'18';     // badge bg
+
+  // Flag annotations
+  const fl=S.flags;
+  let fa='';
+  if(tok.type==='anchor'&&fl.has('m'))     fa+='<span class="fa">m: per-line</span>';
+  if(tok.type==='wildcard'&&fl.has('s'))   fa+='<span class="fa">s: matches \\n</span>';
+  if(tok.type==='charClass'&&fl.has('i'))  fa+='<span class="fa">i: case-insensitive</span>';
+  if(tok.type==='escape'&&fl.has('i')&&'dws'.includes((tok.raw||'')[1]||'')) fa+='<span class="fa">i: active</span>';
+
+  // Children
+  let kids='';
+  if(tok.type==='quantifier'&&tok.child){
+    kids=`<div class="fc-kids">
+      <div class="fc-kids-lbl">Applies to:</div>
+      <div class="crail" style="border-left-color:${cc20}">
+        ${renderCard(tok.child,depth+1)}
+      </div></div>`;
+  }
+  if(tok.type==='group'&&tok.children&&tok.children.length){
+    kids=`<div class="fc-kids">
+      <div class="fc-kids-lbl">Contents:</div>
+      <div class="crail" style="border-left-color:${cc20}">
+        ${renderCards(tok.children,depth+1)}
+      </div></div>`;
+  }
+  if(tok.type==='alternation'&&tok.branches){
+    kids='<div class="fc-kids">';
+    tok.branches.forEach((br,i)=>{
+      kids+=`<div class="brsep">Branch ${i+1}</div>
+        <div class="crail" style="border-left-color:${cc20}">
+          ${br.length?renderCards(br,depth+1):'<div style="font-size:9px;color:var(--t2);padding:2px 0">ε — empty match</div>'}
+        </div>`;
+    });
+    kids+='</div>';
+  }
+
+  const indent=24+depth*14;
+  const dotLeft=8+depth*14;
+  return `
+    <div class="cw" style="padding-left:${indent}px">
+      <div class="cdot" id="d${id}" style="left:${dotLeft}px"></div>
+      <div class="fc" id="${id}"
+           data-s="${tok.start}" data-e="${tok.end}"
+           style="--cc:${c};--cg:${cg};--cc40:${cc40};--cc10:${cc10}"
+           onmouseenter="cHov('${id}',${tok.start},${tok.end})"
+           onmouseleave="cLv('${id}')"
+           onclick="cClk('${id}',${tok.start},${tok.end})">
+        <div class="fc-top">
+          <span class="fc-badge">${th.l}</span>
+          <span class="fc-raw" title="${esc(tok.raw)}">${esc(tok.raw)}</span>
+        </div>
+        <div class="fc-lbl">${esc(tok.label||'')}</div>
+        <div class="fc-desc">${esc(tok.description||'')}</div>
+        ${fa?`<div class="fc-flags">${fa}</div>`:''}
+        ${kids}
+      </div>
+    </div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   INTERACTION HANDLERS  (must be function declarations for inline HTML)
+═══════════════════════════════════════════════════════════════════════ */
+let _activeCard=null;
+
+function cHov(id,start,end){
+  document.querySelectorAll('.rxc').forEach(sp=>{
+    if(+sp.dataset.pos>=start&&+sp.dataset.pos<end) sp.classList.add('hov');
+  });
+  const dot=document.getElementById('d'+id);
+  if(dot) dot.classList.add('lit');
+}
+function cLv(id){
+  document.querySelectorAll('.rxc.hov').forEach(s=>s.classList.remove('hov'));
+  if(_activeCard!==id){
+    const dot=document.getElementById('d'+id);
+    if(dot) dot.classList.remove('lit');
+  }
+}
+function cClk(id,start,end){
+  document.querySelectorAll('.rxc.sel').forEach(s=>s.classList.remove('sel'));
+  document.querySelectorAll('.fc.hl').forEach(c=>c.classList.remove('hl'));
+  const prev=_activeCard?document.getElementById('d'+_activeCard):null;
+  if(prev) prev.classList.remove('lit');
+  if(_activeCard===id){ _activeCard=null; return; }
+  _activeCard=id;
+  document.querySelectorAll('.rxc').forEach(sp=>{
+    if(+sp.dataset.pos>=start&&+sp.dataset.pos<end) sp.classList.add('sel');
+  });
+  const card=document.getElementById(id);
+  if(card) card.classList.add('hl');
+  const dot=document.getElementById('d'+id);
+  if(dot) dot.classList.add('lit');
+}
+
+function rxHov(sp){
+  const ts=+sp.dataset.ts, te=+sp.dataset.te;
+  const card=document.querySelector(`.fc[data-s="${ts}"][data-e="${te}"]`);
+  if(card&&card.id!==_activeCard){
+    card.classList.add('hl');
+    card.scrollIntoView({behavior:'smooth',block:'nearest'});
+  }
+}
+function rxLv(){
+  document.querySelectorAll('.fc.hl').forEach(c=>{ if(c.id!==_activeCard) c.classList.remove('hl'); });
+}
+function rxClk(sp){
+  const ts=+sp.dataset.ts, te=+sp.dataset.te;
+  const card=document.querySelector(`.fc[data-s="${ts}"][data-e="${te}"]`);
+  if(card){ cClk(card.id,ts,te); card.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MATCH ENGINE
+═══════════════════════════════════════════════════════════════════════ */
+function runMatches(pattern, str, flags){
+  if(!pattern||!str) return [];
+  try{
+    const fs=[...flags].join('');
+    if(flags.has('g')){
+      const re=new RegExp(pattern,fs);
+      return [...str.matchAll(re)];
+    } else {
+      const re=new RegExp(pattern,fs);
+      const m=re.exec(str);
+      return m?[m]:[];
+    }
+  } catch{ return []; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MAIN UPDATE LOOP
+═══════════════════════════════════════════════════════════════════════ */
+function update(){
+  const {pattern, testStr, flags} = S;
+
+  /* ── Parse ── */
+  let tokens=[], error=null;
+  if(pattern){
+    try{
+      new RegExp(pattern,[...flags].join('')); // native validation first
+      tokens=new RXParser(pattern).parse();
+    } catch(e){ error=e.message; }
+  }
+  S.tokens=tokens; S.error=error;
+
+  /* ── Input styling ── */
+  const rxEl=document.getElementById('rxInput');
+  const etip=document.getElementById('etip');
+  if(error){
+    rxEl.classList.add('err');
+    etip.textContent='⚠  '+error;
+    etip.classList.add('show');
+  } else {
+    rxEl.classList.remove('err');
+    etip.classList.remove('show');
+  }
+
+  /* ── Syntax view ── */
+  const sv=document.getElementById('synview');
+  sv.innerHTML=renderSynView(pattern,tokens);
+  sv.querySelectorAll('.rxc').forEach(sp=>{
+    sp.addEventListener('mouseenter',()=>rxHov(sp));
+    sp.addEventListener('mouseleave',()=>rxLv());
+    sp.addEventListener('click',()=>rxClk(sp));
+  });
+
+  /* ── Matches ── */
+  const matches=(!error&&pattern&&testStr)?runMatches(pattern,testStr,flags):[];
+  S.matches=matches;
+
+  /* ── Test view ── */
+  document.getElementById('testview').innerHTML=renderTestView(testStr,matches);
+
+  /* ── Match count ── */
+  const mct=document.getElementById('mct');
+  if(!testStr){ mct.textContent='—'; mct.className='mct'; }
+  else if(!matches.length){ mct.textContent='No matches found'; mct.className='mct'; }
+  else { mct.textContent=`${matches.length} match${matches.length!==1?'es':''} found`; mct.className='mct found'; }
+
+  /* ── Capture table ── */
+  const capsec=document.getElementById('capsec');
+  const capcon=document.getElementById('capcontent');
+  if(matches.length&&(matches[0].length>1||matches[0].groups)){
+    const gnm=getGNMap(tokens);
+    capcon.innerHTML=renderCapTable(matches,gnm);
+    capsec.style.display='';
+  } else {
+    capsec.style.display='none';
+    capcon.innerHTML='';
+  }
+
+  /* ── Flight plan ── */
+  _cid=0; _activeCard=null;
+  const root=document.getElementById('cardsroot');
+  const emp=document.getElementById('empstate');
+  const fpline=document.getElementById('fpline');
+  const fpcnt=document.getElementById('fpcnt');
+
+  if(!pattern){
+    emp.style.display=''; root.innerHTML=''; fpline.style.display='none'; fpcnt.textContent='—';
+  } else if(error){
+    emp.style.display='none'; fpline.style.display='none'; fpcnt.textContent='Error';
+    root.innerHTML=`<div class="errc"><div class="errc-title">⚠ Parse Error</div><div class="errc-msg">${esc(error)}</div></div>`;
+  } else {
+    emp.style.display='none'; fpline.style.display='';
+    const n=countToks(tokens);
+    fpcnt.textContent=`${n} token${n!==1?'s':''}`;
+    root.innerHTML=renderCards(tokens);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   FLAG HANDLING
+═══════════════════════════════════════════════════════════════════════ */
+const FDESC={
+  g:'global — finds all matches in the string',
+  i:'ignoreCase — case-insensitive matching',
+  m:'multiline — ^ and $ match line boundaries',
+  s:'dotAll — . also matches newline characters',
+};
+function toggleFlag(btn){
+  const f=btn.dataset.flag;
+  if(S.flags.has(f)){ S.flags.delete(f); btn.classList.remove('on'); }
+  else              { S.flags.add(f);    btn.classList.add('on'); }
+  const active=[...S.flags];
+  document.getElementById('fhint').textContent=
+    active.length?active.map(f=>FDESC[f]).join(' · '):'no flags active';
+  update();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   THEME
+═══════════════════════════════════════════════════════════════════════ */
+function toggleTheme(){
+  const html=document.documentElement;
+  const btn=document.getElementById('themeBtn');
+  if(S.theme==='dark'){
+    S.theme='light'; html.setAttribute('data-theme','light'); btn.textContent='☀ Light';
+  } else {
+    S.theme='dark';  html.setAttribute('data-theme','dark');  btn.textContent='☽ Dark';
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   PRESETS
+═══════════════════════════════════════════════════════════════════════ */
+function togglePresets(){
+  document.getElementById('presetMenu').classList.toggle('open');
+}
+function loadPreset(idx){
+  const p=PRESETS[idx];
+  document.getElementById('rxInput').value=p.pattern;
+  document.getElementById('tsInput').value=p.test;
+  S.pattern=p.pattern; S.testStr=p.test;
+  document.getElementById('presetMenu').classList.remove('open');
+  update();
+}
+function initPresets(){
+  document.getElementById('presetMenu').innerHTML=
+    PRESETS.map((p,i)=>`
+      <div class="pitem" onclick="loadPreset(${i})">
+        <div class="pitem-name">${esc(p.name)}</div>
+        <div class="pitem-pat">${esc(p.pattern)}</div>
+      </div>`).join('');
+}
+document.addEventListener('click',e=>{
+  if(!e.target.closest('#presetBtn')&&!e.target.closest('#presetMenu'))
+    document.getElementById('presetMenu').classList.remove('open');
+});
+
+/* ═══════════════════════════════════════════════════════════════════════
+   COPY & CLEAR
+═══════════════════════════════════════════════════════════════════════ */
+function copyRegex(){
+  if(!S.pattern) return;
+  navigator.clipboard.writeText(S.pattern).then(()=>{
+    const btn=document.getElementById('copyBtn');
+    const orig=btn.textContent;
+    btn.textContent='✓ Copied!'; btn.classList.add('ok');
+    setTimeout(()=>{ btn.textContent=orig; btn.classList.remove('ok'); },1300);
+  });
+}
+function clearAll(){
+  document.getElementById('rxInput').value='';
+  document.getElementById('tsInput').value='';
+  S.pattern=''; S.testStr=''; S.tokens=[]; S.matches=[]; S.error=null; _activeCard=null;
+  update();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   INPUT LISTENERS
+═══════════════════════════════════════════════════════════════════════ */
+document.getElementById('rxInput').addEventListener('input',e=>{ S.pattern=e.target.value; update(); });
+document.getElementById('tsInput').addEventListener('input',e=>{ S.testStr=e.target.value; update(); });
+
+/* ── INIT ── */
+initPresets();
+update();
+</script>
+</body>
+</html>
